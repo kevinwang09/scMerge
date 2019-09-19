@@ -4,10 +4,10 @@
 \alias{fastRUVIII}
 \title{A fast version of the ruv::RUVIII algorithm}
 \usage{
-fastRUVIII(Y, M, ctl, k = NULL, eta = NULL, svd_prop = 0.1,
+fastRUVIII(Y, M, ctl, k = NULL, eta = NULL, svd_k = 50,
   include.intercept = TRUE, average = FALSE, BPPARAM = SerialParam(),
-  BSPARAM = ExactParam(fold = 5), fullalpha = NULL,
-  return.info = FALSE, inputcheck = TRUE)
+  BSPARAM = ExactParam(), fullalpha = NULL, return.info = FALSE,
+  inputcheck = TRUE)
 }
 \arguments{
 \item{Y}{The unnormalised scRNA-Seq data matrix. 
@@ -24,8 +24,8 @@ See ruv::RUVIII for more details.}
 
 \item{eta}{Gene-wise (as opposed to sample-wise) covariates. See ruv::RUVIII for details.}
 
-\item{svd_prop}{If \code{BSPARAM} is not \code{ExactParam}, then \code{svd_prop} will be used to used to reduce the computational cost of randomised singular value decomposition. 
-We recommend setting this number to less than 0.25 to achieve a balance between numerical accuracy and computational costs.}
+\item{svd_k}{If BSPARAM is set to \code{RandomParam} or \code{IrlbaParam} class from \code{BiocSingular} package, then 
+\code{svd_k} will be used to used to reduce the computational cost of singular value decomposition. Default to 50.}
 
 \item{include.intercept}{When eta is specified (not NULL) but does not already include an intercept term, this will automatically include one.
 See ruv::RUVIII for details.}
@@ -34,7 +34,7 @@ See ruv::RUVIII for details.}
 
 \item{BPPARAM}{A \code{BiocParallelParam} class object from the \code{BiocParallel} package is used. Default is SerialParam().}
 
-\item{BSPARAM}{A \code{BiocSingularParam} class object from the \code{BiocSingular} package is used. Default is ExactParam(fold = 5).}
+\item{BSPARAM}{A \code{BiocSingularParam} class object from the \code{BiocSingular} package is used. Default is ExactParam().}
 
 \item{fullalpha}{Not used. Please ignore. See ruv::RUVIII for details.}
 
@@ -54,7 +54,7 @@ Y = L$Y; M = L$M; ctl = L$ctl
 improved1 = scMerge::fastRUVIII(Y = Y, M = M, ctl = ctl, 
 k = 20, BSPARAM = BiocSingular::ExactParam())
 improved2 = scMerge::fastRUVIII(Y = Y, M = M, ctl = ctl, 
-k = 20, BSPARAM = BiocSingular::RandomParam(), svd_prop = 0.1)
+k = 20, BSPARAM = BiocSingular::RandomParam(), svd_k = 50)
 old = ruv::RUVIII(Y = Y, M = M, ctl = ctl, k = 20)
 all.equal(improved1, old)
 all.equal(improved2, old)

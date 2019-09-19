@@ -14,15 +14,17 @@
 #' @param cell_type An optional vector indicating the cell type information for each cell in the batch-combined matrix. If it is \code{NULL}, pseudo-replicate procedure will be run to identify cell type.
 #' @param cell_type_match An optional logical input for whether to find mutual nearest cluster using cell type information.
 #' @param cell_type_inc An optional vector indicating the indices of the cells that will be used to supervise the pseudo-replicate procedure.
-#' @param svd_prop If BSPARAM is set to \code{RandomParam} class from \code{BiocSingular} package, then \code{svd_prop} will be used to used to 
-#' reduce the computational cost of randomised singular value decomposition. Default to 0.1.
-#' @param BSPARAM A \code{BiocSingularParam} class object from the \code{BiocSingular} package is used. Default is ExactParam(fold = 5).
+#' @param svd_k If BSPARAM is set to \code{RandomParam} or \code{IrlbaParam} class from \code{BiocSingular} package, then 
+#' \code{svd_k} will be used to used to reduce the computational cost of singular value decomposition. Default to 50.
+#' @param BSPARAM A \code{BiocSingularParam} class object from the \code{BiocSingular} package is used. Default is ExactParam().
 #' @param dist The distance metrics that are used in the calculation of the mutual nearest cluster, default is Pearson correlation.
 #' @param WV A optional vector indicating the wanted variation factor other than cell type info, such as cell stages.
 #' @param WV_marker An optional vector indicating the markers of the wanted variation.
 #' @param BPPARAM A \code{BiocParallelParam} class object from the \code{BiocParallel} package is used. Default is SerialParam().
 #' @param return_all_RUV If \code{FALSE}, then only returns a \code{SingleCellExperiment} object with original data and one normalised matrix.
 #' Otherwise, the \code{SingleCellExperiment} object will contain the original data and one normalised matrix for \code{each} ruvK value. In this latter case, assay_name must have the same length as ruvK.
+#' @param BACKEND The BACKEND parameter used in DelayedArray::realize(result, BACKEND = BACKEND) to coerce the final output. 
+#' Default to NULL, see DelayedArray::supportedRealizationBackends() for other options.
 #' @param assay_name The assay name(s) for the adjusted expression matrix(matrices). If \code{return_all_RUV = TRUE} assay_name must have the same length as ruvK.
 #' @param plot_igraph If \code{TRUE}, then during the un/semi-supervised scMerge, igraph plot will be displayed
 #' @param verbose If \code{TRUE}, then all intermediate steps will be shown. Default to \code{FALSE}.
@@ -59,9 +61,9 @@
 scMerge <- function(sce_combine, ctl = NULL, kmeansK = NULL, 
     exprs = "logcounts", hvg_exprs = "counts", marker = NULL, 
     marker_list = NULL, ruvK = 20, replicate_prop = 1, cell_type = NULL, 
-    cell_type_match = FALSE, cell_type_inc = NULL, BSPARAM = ExactParam(fold = 5), 
-    svd_prop = 0.1, dist = "cor", WV = NULL, WV_marker = NULL, 
-    BPPARAM = SerialParam(), return_all_RUV = FALSE, 
+    cell_type_match = FALSE, cell_type_inc = NULL, BSPARAM = ExactParam(), 
+    svd_k = 50, dist = "cor", WV = NULL, WV_marker = NULL, 
+    BPPARAM = SerialParam(), return_all_RUV = FALSE, BACKEND = NULL,
     assay_name = NULL, plot_igraph = TRUE, verbose = FALSE) {
     
     ## Checking input expression
@@ -201,7 +203,7 @@ scMerge <- function(sce_combine, ctl = NULL, kmeansK = NULL,
     ruv3res <- scRUVIII(Y = exprs_mat, M = repMat, ctl = ctl, 
         k = ruvK, batch = batch, fullalpha = NULL, cell_type = cell_type, 
         return_all_RUV = return_all_RUV, BSPARAM = BSPARAM, BPPARAM = BPPARAM,
-        svd_prop = svd_prop)
+        svd_k = svd_k)
     t3 <- Sys.time()
     
     timeRuv <- t3 - t2
@@ -223,6 +225,14 @@ scMerge <- function(sce_combine, ctl = NULL, kmeansK = NULL,
         ## If return_all_RUV is FALSE, then scRUVIII should've just
         ## returned with a single result (ruv3res_optimal)
         SummarizedExperiment::assay(sce_final_result, assay_name) <- t(ruv3res$newY)
+    }
+    
+    if(is.null(BACKEND)){
+        
+    } else {
+        for(i in SummarizedExperiment::assayNames(sce_final_result)){
+            SummarizedExperiment::assay(sce_final_result, i) = DelayedArray::realize(SummarizedExperiment::assay(sce_final_result, i), BACKEND)
+        }
     }
     
     S4Vectors::metadata(sce_final_result) <- c(S4Vectors::metadata(sce_combine), 

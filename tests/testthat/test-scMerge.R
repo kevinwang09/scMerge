@@ -12,23 +12,28 @@ sce_mESC <- scMerge(
 
 ## Simulated data, testing on sce = TRUE option and supervised scMerge
 set.seed(12345)
-L = ruvSimulate(m = 100, n = 1000, nc = 400, 
+L = ruvSimulate(m = 200, n = 1000, nc = 100, 
                 nCelltypes = 3, nBatch = 2, 
                 lambda = 0.1, sce = TRUE)
 
 L_result1 <- scMerge(
   sce_combine = L,
   ctl = paste0("gene",1:100),
-  kmeansK = c(3, 3),
+  # kmeansK = c(3, 3),
   cell_type = L$cellTypes,
   assay_name = 'scMerge')
 
+L_result1 <- scMerge(
+    sce_combine = L,
+    ctl = paste0("gene",1:100),
+    kmeansK = c(3, 3),
+    # cell_type = L$cellTypes,
+    assay_name = 'scMerge')
 
 ruvK = c(10, 20)
 L_result2 <- scMerge(
   sce_combine = L,
   ctl = paste0("gene",1:100),
-  kmeansK = c(3, 3),
   cell_type = L$cellTypes,
   ruvK = ruvK,
   assay_name = paste0("ruv", ruvK))
@@ -118,3 +123,27 @@ expect_error(
     assay_name = 'scMerge')
 )
 
+
+## NA's in cell_type or batch
+na_cell_type = L$cellTypes
+na_cell_type[1] = NA
+
+expect_error(
+  scMerge(
+    sce_combine = L,
+    ctl = paste0("gene",1:100),
+    cell_type = na_cell_type,
+    assay_name = "error")
+)
+
+na_batch = L$batch
+na_batch[1] = NA
+L$batch = na_batch
+
+expect_error(
+  scMerge(
+    sce_combine = L,
+    ctl = paste0("gene",1:100),
+    kmeansK = c(3, 3),
+    assay_name = "error")
+)

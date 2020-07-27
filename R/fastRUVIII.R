@@ -21,9 +21,7 @@
 #' @param fullalpha Not used. Please ignore. See ruv::RUVIII for details.
 #' @param return.info Additional information relating to the computation of normalised matrix. We recommend setting this to true.
 #' @param inputcheck We recommend setting this to true.
-#' @useDynLib scMerge, .registration = TRUE
-#' @importFrom Rcpp sourceCpp
-#' @importFrom BiocSingular runRandomSVD
+#' @importFrom DelayedArray t
 #' @importFrom BiocSingular runExactSVD
 #' @export
 #' @return
@@ -88,23 +86,16 @@ fastRUVIII <- function(Y, M, ctl, k = NULL, eta = NULL,
                 ## matrix M to a matrix Y Y0 has the same dimensions as Y,
                 ## i.e. m rows (observations) and n columns (genes).
                 
-                if(class(Y) == "matrix"){
-                    Y0 <- eigenResidop(Y, M)
-                } else if (class(Y) == "dgeMatrix"){
-                    Y0 <- eigenResidop(as.matrix(Y), M)
-                } else {
-                    Y0 <- ruv::residop(Y, M)
-                }
+                Y0 <- my_residop(Y, M)
             
                 svdObj <- BiocSingular::runSVD(x = Y0, k = svd_k, BPPARAM = BPPARAM, BSPARAM = BSPARAM)
                 
-                fullalpha <- t(svdObj$u[, seq_len(svd_k), drop = FALSE]) %*% Y
+                fullalpha <- DelayedArray::t(svdObj$u[, seq_len(svd_k), drop = FALSE]) %*% Y
             }  ## End is.null(fullalpha)
         ###############
-        alpha <- fullalpha[seq_len(min(k, nrow(fullalpha))), 
-            , drop = FALSE]
+        alpha <- fullalpha[seq_len(min(k, nrow(fullalpha))), , drop = FALSE]
         ac <- alpha[, ctl, drop = FALSE]
-        W <- Y[, ctl] %*% t(ac) %*% solve(ac %*% t(ac))
+        W <- Y[, ctl] %*% DelayedArray::t(ac) %*% solve(ac %*% DelayedArray::t(ac))
         newY <- Y - W %*% alpha
     }  ## End else(ncol(M) >= m | k == 0)
     
@@ -121,4 +112,15 @@ tological <- function(ctl, n) {
     ctl2 <- rep(FALSE, n)
     ctl2[ctl] <- TRUE
     return(ctl2)
+}
+
+
+#' @importFrom DelayedArray t
+my_residop <- function(A, B){
+    tBB = DelayedArray::t(B) %*% B
+    tBB_inv = Matrix::solve(tBB)
+    BtBB_inv = B %*% tBB_inv
+    tBA = DelayedArray::t(B) %*% A
+    BtBB_inv_tBA = BtBB_inv %*% tBA
+    return(A - BtBB_inv_tBA)
 }

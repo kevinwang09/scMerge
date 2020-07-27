@@ -7,6 +7,7 @@
 #' @param kmeansK A vector indicates the kmeans's K for each batch. The length of kmeansK needs to be the same as the number of batch.
 #' @param exprs A string indicating the name of the assay requiring batch correction in sce_combine, default is logcounts.
 #' @param hvg_exprs A string indicating the assay that to be used for highly variable genes identification in sce_combine, default is counts.
+#' @param batch_name A character indicating the name of the batch column, default to "batch"
 #' @param marker An optional vector of markers, to be used in calculation of mutual nearest cluster. If no markers input, highly variable genes will be used instead.
 #' @param marker_list An optional list of markers for each batch, which will be used in calculation of mutual nearest cluster.
 #' @param ruvK An optional integer/vector indicating the number of unwanted variation factors that are removed, default is 20.
@@ -23,8 +24,6 @@
 #' @param BPPARAM A \code{BiocParallelParam} class object from the \code{BiocParallel} package is used. Default is SerialParam().
 #' @param return_all_RUV If \code{FALSE}, then only returns a \code{SingleCellExperiment} object with original data and one normalised matrix.
 #' Otherwise, the \code{SingleCellExperiment} object will contain the original data and one normalised matrix for \code{each} ruvK value. In this latter case, assay_name must have the same length as ruvK.
-#' @param BACKEND The BACKEND parameter used in DelayedArray::realize(result, BACKEND = BACKEND) to coerce the final output. 
-#' Default to NULL, see DelayedArray::supportedRealizationBackends() for other options.
 #' @param assay_name The assay name(s) for the adjusted expression matrix(matrices). If \code{return_all_RUV = TRUE} assay_name must have the same length as ruvK.
 #' @param plot_igraph If \code{TRUE}, then during the un/semi-supervised scMerge, igraph plot will be displayed
 #' @param verbose If \code{TRUE}, then all intermediate steps will be shown. Default to \code{FALSE}.
@@ -52,31 +51,24 @@
 #' ctl = segList_ensemblGeneID$mouse$mouse_scSEG,
 #' kmeansK = c(3, 3),
 #' assay_name = 'scMerge')
-#' scater::plotPCA(sce_mESC, colour_by = 'cellTypes', shape = 'batch',
-#'                  run_args = list(exprs_values = 'logcounts'))
-#' scater::plotPCA(sce_mESC, colour_by = 'cellTypes', shape = 'batch',
-#'                  run_args = list(exprs_values = 'scMerge'))
+#' 
+#' sce_mESC = scater::runPCA(sce_mESC, exprs_values = "logcounts")                      
+#' scater::plotPCA(sce_mESC, colour_by = 'cellTypes', shape = 'batch')
+#' 
+#' sce_mESC = scater::runPCA(sce_mESC, exprs_values = 'scMerge')                                       
+#' scater::plotPCA(sce_mESC, colour_by = 'cellTypes', shape = 'batch')
 
 
 scMerge <- function(sce_combine, ctl = NULL, kmeansK = NULL, 
-    exprs = "logcounts", hvg_exprs = "counts", marker = NULL, 
+    exprs = "logcounts", hvg_exprs = "counts", batch_name = "batch", marker = NULL, 
     marker_list = NULL, ruvK = 20, replicate_prop = 1, cell_type = NULL, 
     cell_type_match = FALSE, cell_type_inc = NULL, BSPARAM = ExactParam(), 
     svd_k = 50, dist = "cor", WV = NULL, WV_marker = NULL, 
-    BPPARAM = SerialParam(), return_all_RUV = FALSE, BACKEND = NULL,
+    BPPARAM = SerialParam(), return_all_RUV = FALSE,
     assay_name = NULL, plot_igraph = TRUE, verbose = FALSE) {
     
-    ## Checking input expression
-    if (is.null(exprs)) {
-        stop("exprs is NULL.")
-    }
     
-    
-    ## Checking input expression assay name in SCE object
-    if (!exprs %in% SummarizedExperiment::assayNames(sce_combine)) {
-        stop(paste("No assay named", exprs))
-    }
-    
+    ## In case there are complete zeroes in the rows or columns
     colsum_exprs = DelayedMatrixStats::colSums2(SummarizedExperiment::assay(sce_combine, exprs))
     rowsum_exprs = DelayedMatrixStats::rowSums2(SummarizedExperiment::assay(sce_combine, exprs))
     if(any(colsum_exprs == 0) | any(rowsum_exprs == 0)){
@@ -85,99 +77,44 @@ scMerge <- function(sce_combine, ctl = NULL, kmeansK = NULL,
         sce_combine = sce_combine[rowsum_exprs != 0, colsum_exprs != 0]
     }
     
-    ## Checking if the cell names are non-unique
-    cellNames = colnames(sce_combine)
-    
-    if (length(cellNames) != length(unique(cellNames))) {
-        stop("Please make sure column names are unique.")
-    }
-    
-    if (is.null(assay_name)) {
-        stop("assay_name is NULL, please provide a name to store the results under")
-    }
-    
+    ## This is a very niche option, consider deprecation in the future
     if (length(ruvK) > 1){
         message("You chose more than one ruvK. The argument return_all_RUV is forced to be TRUE.")
         return_all_RUV = TRUE
     }
     
-    if (return_all_RUV) {
-        message("You chose return_all_RUV = TRUE. The result will contain all RUV computations. This could be a very large object.")
-        ## We need an assay_name for every ruvK, if return_all_RUV is
-        ## TRUE
-        if (length(assay_name) != length(ruvK)) {
-            stop("You chose return_all_RUV = TRUE. In this case, the length of assay_name must be equal to the length of ruvK")
-        }
-    }
-    
+    check_input(sce_combine = sce_combine, exprs = exprs, hvg_exprs = hvg_exprs, 
+                assay_name = assay_name, batch_name = batch_name, ruvK = ruvK, 
+                return_all_RUV = return_all_RUV, cell_type = cell_type)
     
     ## Extracting data matrix from SCE object
     exprs_mat <- SummarizedExperiment::assay(sce_combine, exprs)
-    if (!is.matrix(exprs_mat)) {
-        # stop(paste0("The assay named '", exprs, "' must be of class 'matrix', please convert this."))
-    }
     
-    
-    sce_rownames <- rownames(sce_combine)
-    
-    if (is.null(colnames(exprs_mat)) | 
-        length(colnames(exprs_mat)) != length(unique(colnames(exprs_mat)))) {
-        stop("colnames of exprs is NULL or contains duplicates")
-    }
-    
-    
-    hvg_exprs_mat <- SummarizedExperiment::assay(sce_combine, hvg_exprs)
-    if (!is.matrix(hvg_exprs_mat)) {
-        # stop(paste0("The assay named '", hvg_exprs, "' must be of class 'matrix', please convert this."))
-    }
     
     ## Checking negative controls input
+    sce_rownames <- rownames(sce_combine)
     if (is.null(ctl)) {
-        stop("Negative control genes are needed. \n")
+        stop("Negative control genes are needed. \n 
+             You could use either a pre-computed list or use scSEGIndex(), see vignette.")
     } else {
         if (is.character(ctl)) {
             ctl <- which(sce_rownames %in% ctl)
         }
         if (length(ctl) == 0) {
-            stop("Could not find any negative control genes in the row names of the expression matrix", 
+            stop("Negative control genes are needed. \n 
+             You could use either a pre-computed list or use scSEGIndex(), see vignette.",
                 call. = FALSE)
         }
     }
     
-    ## Checking the batch info
-    if (is.null(sce_combine$batch)) {
-        stop("Could not find a 'batch' column in colData(sce_combine)", 
-            call. = FALSE)
-    }
+    ## Dealing with batch
+    sce_combine$batch = sce_combine[[batch_name]]
     
     if (is.factor(sce_combine$batch)) {
         batch <- droplevels(sce_combine$batch)
     } else {
         batch <- sce_combine$batch
     }
-    
-    
-    
-    # ## If the user supplied a parallelParam class, then regardless
-    # ## of parallel = TRUE or FALSE, we will use that class Hence
-    # ## no if statement for this case.
-    # if (!is.null(parallelParam)) {
-    #     message("Step 1: Computation will run in parallel using supplied parameters")
-    # }
-    # 
-    # ## If parallel is TRUE, but user did not supplied a
-    # ## parallelParam class, then we set it to bpparam()
-    # if (parallel & is.null(parallelParam)) {
-    #     message("Step 1: Computation will run in parallel using BiocParallel::bpparam()")
-    #     parallelParam = BiocParallel::bpparam()
-    # }
-    # 
-    # ## If parallel is FALSE, or the user did not supplied a
-    # ## parallelParam class, we will use SerialParam()
-    # if (!parallel | is.null(parallelParam)) {
-    #     message("Step 1: Computation will run in serial")
-    #     parallelParam = BiocParallel::SerialParam()
-    # }
     
     
     ## Finding pseudo-replicates
@@ -208,7 +145,7 @@ scMerge <- function(sce_combine, ctl = NULL, kmeansK = NULL,
     
     timeRuv <- t3 - t2
     
-    sce_final_result <- sce_combine
+    sce_combine <- sce_combine
     
     if (return_all_RUV) {
         ## if return_all_RUV is TRUE, then the previous check ensured
@@ -219,28 +156,72 @@ scMerge <- function(sce_combine, ctl = NULL, kmeansK = NULL,
                            function(x) {t(x$newY)})
         
         for (i in seq_len(length(listNewY))) {
-            SummarizedExperiment::assay(sce_final_result, assay_name[i]) <- listNewY[[i]]
+            SummarizedExperiment::assay(sce_combine, assay_name[i]) <- listNewY[[i]]
         }
     } else {
         ## If return_all_RUV is FALSE, then scRUVIII should've just
         ## returned with a single result (ruv3res_optimal)
-        SummarizedExperiment::assay(sce_final_result, assay_name) <- t(ruv3res$newY)
+        SummarizedExperiment::assay(sce_combine, assay_name) <- t(ruv3res$newY)
     }
     
-    if(is.null(BACKEND)){
-        
-    } else {
-        for(i in SummarizedExperiment::assayNames(sce_final_result)){
-            SummarizedExperiment::assay(sce_final_result, i) = DelayedArray::realize(SummarizedExperiment::assay(sce_final_result, i), BACKEND)
-        }
-    }
-    
-    S4Vectors::metadata(sce_final_result) <- c(S4Vectors::metadata(sce_combine), 
+    S4Vectors::metadata(sce_combine) <- c(S4Vectors::metadata(sce_combine), 
         list(ruvK = ruvK, ruvK_optimal = ruv3res$optimal_ruvK, 
             scRep_res = repMat, timeReplicates = timeReplicates, 
             timeRuv = timeRuv))
     
     message("scMerge complete!")
     
-    return(sce_final_result)
+    return(sce_combine)
 }  ## End scMerge function
+
+
+check_input = function(sce_combine, exprs, hvg_exprs, assay_name, batch_name, ruvK, return_all_RUV, cell_type){
+    #### Checking input expression
+    if (is.null(exprs) | !exprs %in% SummarizedExperiment::assayNames(sce_combine)) {
+        stop("The 'exprs' argument is NULL or it not a part of the supplied SingleCellExperiment object 'assayNames'")
+    }
+    
+    if (is.null(hvg_exprs) | !hvg_exprs %in% SummarizedExperiment::assayNames(sce_combine)) {
+        stop("The 'hvg_exprs' argument is NULL or it not a part of the supplied SingleCellExperiment object 'assayNames'")
+    }
+    
+    #### Checking if the cell names are non-unique
+    cell_names = colnames(sce_combine)
+    
+    if (length(cell_names) != length(unique(cell_names)) | is.null(cell_names)) {
+        stop("Column names of the input SingleCellExperiment object must not contain duplicates nor NULL")
+    }
+    
+    #### Returned assay name. Consider setting a default in future releases
+    if (is.null(assay_name)) {
+        stop("assay_name is NULL, please provide a name to store the results under")
+    }
+    
+    
+    #### Checking the batch info
+    if (!(batch_name %in% colnames(colData(sce_combine)))) {
+        stop(cat("Could not find a ", batch_name, " column in colData(sce_combine)"), 
+             call. = FALSE)
+    }
+    
+    if(sum(is.na(sce_combine[[batch_name]])) != 0){
+        stop("NA's found the batch column, please remove")
+    }
+    
+    
+    #### Checking the cell_type info
+    
+    if(sum(is.na(cell_type)) != 0){
+        stop("NA's found the cell_type input, please remove")
+    }
+    
+    #### This is a very niche option, consider deprecation in the future
+    if (return_all_RUV) {
+        message("You chose return_all_RUV = TRUE. The result will contain all RUV computations. This could be a very large object.")
+        ## We need an assay_name for every ruvK, if return_all_RUV is
+        ## TRUE
+        if (length(assay_name) != length(ruvK)) {
+            stop("You chose return_all_RUV = TRUE. In this case, the length of assay_name must be equal to the length of ruvK")
+        }
+    }
+}

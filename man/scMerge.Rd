@@ -4,14 +4,31 @@
 \alias{scMerge}
 \title{Perform the scMerge algorithm}
 \usage{
-scMerge(sce_combine, ctl = NULL, kmeansK = NULL, exprs = "logcounts",
-  hvg_exprs = "counts", marker = NULL, marker_list = NULL,
-  ruvK = 20, replicate_prop = 1, cell_type = NULL,
-  cell_type_match = FALSE, cell_type_inc = NULL,
-  BSPARAM = ExactParam(), svd_k = 50, dist = "cor", WV = NULL,
-  WV_marker = NULL, BPPARAM = SerialParam(), return_all_RUV = FALSE,
-  BACKEND = NULL, assay_name = NULL, plot_igraph = TRUE,
-  verbose = FALSE)
+scMerge(
+  sce_combine,
+  ctl = NULL,
+  kmeansK = NULL,
+  exprs = "logcounts",
+  hvg_exprs = "counts",
+  batch_name = "batch",
+  marker = NULL,
+  marker_list = NULL,
+  ruvK = 20,
+  replicate_prop = 1,
+  cell_type = NULL,
+  cell_type_match = FALSE,
+  cell_type_inc = NULL,
+  BSPARAM = ExactParam(),
+  svd_k = 50,
+  dist = "cor",
+  WV = NULL,
+  WV_marker = NULL,
+  BPPARAM = SerialParam(),
+  return_all_RUV = FALSE,
+  assay_name = NULL,
+  plot_igraph = TRUE,
+  verbose = FALSE
+)
 }
 \arguments{
 \item{sce_combine}{A \code{SingleCellExperiment} object contains the batch-combined matrix with batch info in colData.}
@@ -23,6 +40,8 @@ scMerge(sce_combine, ctl = NULL, kmeansK = NULL, exprs = "logcounts",
 \item{exprs}{A string indicating the name of the assay requiring batch correction in sce_combine, default is logcounts.}
 
 \item{hvg_exprs}{A string indicating the assay that to be used for highly variable genes identification in sce_combine, default is counts.}
+
+\item{batch_name}{A character indicating the name of the batch column, default to "batch"}
 
 \item{marker}{An optional vector of markers, to be used in calculation of mutual nearest cluster. If no markers input, highly variable genes will be used instead.}
 
@@ -54,9 +73,6 @@ scMerge(sce_combine, ctl = NULL, kmeansK = NULL, exprs = "logcounts",
 \item{return_all_RUV}{If \code{FALSE}, then only returns a \code{SingleCellExperiment} object with original data and one normalised matrix.
 Otherwise, the \code{SingleCellExperiment} object will contain the original data and one normalised matrix for \code{each} ruvK value. In this latter case, assay_name must have the same length as ruvK.}
 
-\item{BACKEND}{The BACKEND parameter used in DelayedArray::realize(result, BACKEND = BACKEND) to coerce the final output. 
-Default to NULL, see DelayedArray::supportedRealizationBackends() for other options.}
-
 \item{assay_name}{The assay name(s) for the adjusted expression matrix(matrices). If \code{return_all_RUV = TRUE} assay_name must have the same length as ruvK.}
 
 \item{plot_igraph}{If \code{TRUE}, then during the un/semi-supervised scMerge, igraph plot will be displayed}
@@ -84,10 +100,12 @@ sce_mESC <- scMerge(sce_combine = example_sce,
 ctl = segList_ensemblGeneID$mouse$mouse_scSEG,
 kmeansK = c(3, 3),
 assay_name = 'scMerge')
-scater::plotPCA(sce_mESC, colour_by = 'cellTypes', shape = 'batch',
-                 run_args = list(exprs_values = 'logcounts'))
-scater::plotPCA(sce_mESC, colour_by = 'cellTypes', shape = 'batch',
-                 run_args = list(exprs_values = 'scMerge'))
+
+sce_mESC = scater::runPCA(sce_mESC, exprs_values = "logcounts")                      
+scater::plotPCA(sce_mESC, colour_by = 'cellTypes', shape = 'batch')
+
+sce_mESC = scater::runPCA(sce_mESC, exprs_values = 'scMerge')                                       
+scater::plotPCA(sce_mESC, colour_by = 'cellTypes', shape = 'batch')
 }
 \author{
 Yingxin Lin, Kevin Wang

@@ -1,12 +1,21 @@
 #' @title Single Cell Stably Express Gene Index
-#' @description Calculate single-cell Stably Expressed Gene (scSEG) index from Lin. et. al. (2019). 
-
+#' @description This function computes the single-cell Stably Expressed Gene (scSEG) 
+#' index from Lin. et al. (2019) for a given single-cell count data matrix. Each gene in the data is 
+#' fitted with a gamma-normal mixture model and the final SEG index is computed as an average of 
+#' key parameters that measure the expression stability of a gene. 
+#' 
+#' We recommend using either the pre-computed genes (see "See Also" below) or the top SEG genes 
+#' from an user's own data as the control genes in the \code{scMerge} function 
+#' (see the \code{ctl} argument in the \code{scMerge} function).
+#'  
 #' @author Shila Ghazanfar, Yingxin Lin, Pengyi Yang
 #' @param exprs_mat A log-transformed single-cell data, assumed to have no batch effect and covered a wide range of cell types. 
 #' A n by m matrix, where n is the number of genes and m is the number of cells.
 #' @param cell_type A vector indicating the cell type information for each cell in the gene expression matrix. 
 #' If it is \code{NULL}, the function calculates the scSEG index without using F-statistics.
 #' @param BPPARAM A \code{BiocParallelParam} class object from the \code{BiocParallel} package is used. Default is SerialParam(progressbar = TRUE).
+#' @param return_all Default to FALSE. If set to TRUE, then all genes will be returned. Otherwise, 
+#' only genes with less than 80 percent zeroes will be returned. 
 #' @return Returns a data frame. 
 #' Each row is a gene and each column is a statistic relating to the stability of expression of each gene.
 #' The main statistic is the \code{segIdx} column, which is the SEG index.
@@ -23,6 +32,8 @@
 #' ## If parallelisation is needed:
 #' param = BiocParallel::MulticoreParam(workers = 2, progressbar = TRUE)
 #' result2 = scSEGIndex(exprs_mat = exprs_mat, BPPARAM = param)
+#' ## Closing the parallelisation
+#' BiocParallel::register(BPPARAM = BiocParallel::SerialParam())
 #' @references Evaluating stably expressed genes in single cells (2019). doi:10.1093/gigascience/giz106. 
 #' @seealso Download human SEG directly from this \href{http://www.maths.usyd.edu.au/u/pengyi/software/scHK/scHK_human.xlsx}{link}; 
 #' Download mouse SEG directly from this \href{http://www.maths.usyd.edu.au/u/pengyi/software/scHK/scHK_mouse.xlsx}{link}.
@@ -32,7 +43,8 @@
 
 # This is the main function for calculating stably expressed
 # gene index
-scSEGIndex <- function(exprs_mat, cell_type = NULL, BPPARAM = SerialParam(progressbar = TRUE)) {
+scSEGIndex <- function(exprs_mat, cell_type = NULL, BPPARAM = SerialParam(progressbar = TRUE),
+                       return_all = FALSE) {
   
   if (is.null(exprs_mat)) {
     stop("exprs_mat is NULL.")
@@ -123,8 +135,16 @@ scSEGIndex <- function(exprs_mat, cell_type = NULL, BPPARAM = SerialParam(progre
                          mu = m, mu.scaled = m.scaled, zero = z, f_stats = f)
     
   }
-  
-  return(resMat)
+ if(return_all){
+   resMat2 = cbind(gene = as.character(rownames(resMat)), resMat)
+   all_genes = data.frame(gene = as.character(rownames(exprs_mat)),
+                       zero.all = rowMeans(exprs_mat == 0))
+   result = merge(x = all_genes, y = resMat2, by = "gene", all.x = TRUE)
+   rownames(result) = rownames(exprs_mat)
+ } else {
+   result = resMat
+ }
+  return(result)
 }
 
 
@@ -210,6 +230,7 @@ gammaNormMix <- function(data, thresh = 1e-07, maxiter = 10000,
   # initiate
   n = length(x)
   z = stats::rbinom(n, 1, 0.5)
+  if(sum(z) == 0){z[1] = 1} ## Break out of a sequence of zeroes error
   z_iter = z
   mu = -100
   mu_iter = 10

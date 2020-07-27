@@ -7,14 +7,15 @@
 
 <img src="https://github.com/SydneyBioX/scMerge/raw/master/inst/logo.png" align="right" width="200" />
 
-[![Travis build
-status](https://travis-ci.org/SydneyBioX/scMerge.svg?branch=master)](https://travis-ci.org/SydneyBioX/scMerge)
+[![R build
+status](https://github.com/SydneyBioX/scMerge/workflows/R-CMD-check/badge.svg)](https://github.com/SydneyBioX/scMerge/actions)
 [![Codecov test
 coverage](https://codecov.io/gh/SydneyBioX/scMerge/branch/master/graph/badge.svg)](https://codecov.io/gh/SydneyBioX/scMerge?branch=master)
 [![](https://img.shields.io/badge/doi-10.1073/pnas.1820006116-blue.svg)](https://doi.org/10.1073/pnas.1820006116)
-[![](https://img.shields.io/badge/devel%20version-1.1.2-blue.svg)](https://github.com/SydneyBioX/scMerge)
-[![](https://img.shields.io/badge/download-84/total-green.svg)](https://bioconductor.org/packages/stats/bioc/scMerge)
+[![](https://img.shields.io/badge/devel%20version-1.5.0-blue.svg)](https://github.com/SydneyBioX/scMerge)
+[![](https://img.shields.io/badge/download-1155/total-green.svg)](https://bioconductor.org/packages/stats/bioc/scMerge)
 [![](https://img.shields.io/github/last-commit/SydneyBioX/scMerge.svg)](https://github.com/SydneyBioX/scMerge/commits/master)
+[![](https://img.shields.io/badge/Docker%20image-available-blue.svg)](https://hub.docker.com/repository/docker/kevinwang09/scmerge)
 
 <br />
 
@@ -45,7 +46,7 @@ You can find a list of case studies here:
 
 ## Contact us
 
-If you have any enquries, especially about performing `scMerge`
+If you have any enquiries, especially about performing `scMerge`
 integration on your own data, then please contact
 <bioinformatics@maths.usyd.edu.au>. You can also [open an
 issue](https://github.com/SydneyBioX/scMerge/issues) on GitHub.
